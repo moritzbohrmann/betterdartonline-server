@@ -63,13 +63,6 @@ io.on("connection", (socket) => {
 
       socket.emit("passed", match);
 
-      const legshot = (player) => {
-         return {
-            player,
-            throw: match.throw,
-         };
-      };
-
       log(`${player.username} joined the match #${match.id}!`);
 
       if (connectedPlayers.includes(player)) {
@@ -144,7 +137,7 @@ io.on("connection", (socket) => {
 
          //* Emitting the checkout
 
-         sendData([match.players.host, match.players.guest], "legshot", { player: updtScore.player, legPreview: legPreview });
+         sendData([match.players.host, match.players.guest], "legshot", { player: updtScore.player, legPreview: legPreview, currentLeg });
 
          matches.set(match.id, match);
 

@@ -3,13 +3,11 @@ const app = express();
 const http = require("http");
 const sio = require("socket.io");
 const matchserver = require("socket.io-client").connect("http://localhost:8457");
-
 const cors = require("cors");
 
 app.use(cors());
 
 const server = http.createServer(app);
-
 const io = new sio.Server(server, {
    cors: {
       origin: "http://localhost:3000",
@@ -17,81 +15,80 @@ const io = new sio.Server(server, {
    },
 });
 
-const connectedPlayers = new Array();
-const playerSockets = new Map();
+const EventType = {
+   JOIN: "join",
+   QUIT: "quit",
+   DISCONNECT: "disconnect",
+   REQUEST: "request",
+   REQUEST_REVOKE: "request-revoke",
+   REQUEST_DECLINE: "request-decline",
+   REQUEST_ACCEPT: "request-accept",
+   MATCH_START: "match-start",
+   ERROR: "error",
+   FETCH_MATCH: "match-request",
+   MATCH_CONTINUE: "match-continue",
+};
+
+const players = new Array();
+const sockets = new Map();
+const room = {
+   X01: new Array(),
+   Cricket: new Array(),
+   Split: new Array(),
+};
 
 const quit = (socket) => {
-   let player = getPlayer(socket);
+   const player = getPlayer(socket);
 
-   if (player != null) {
-      playerSockets.delete(player.id);
-      connectedPlayers.splice(connectedPlayers.indexOf(player), 1);
+   if (player) {
+      const roomMates = getRoom(player.selected);
 
-      io.emit("quit", player);
-      log(`${player.username} left the lobby!`);
+      sockets.delete(player.id);
+      players.splice(players.indexOf(player), 1);
+
+      room[player.selected].splice(roomMates.indexOf(player), 1);
+
+      for (const all of room[player.selected]) all.emit(EventType.QUIT, player);
+      socket.emit(EventType.QUIT, getRoom(player.selected));
+
+      log(player.username + " left room " + player.selected + "!");
    }
 };
 
 io.on("connection", (socket) => {
-   connectedPlayers.map((player) => {
-      socket.emit("join", player);
-   });
-
-   socket.on("join", (player) => {
-      let error = false;
-
-      connectedPlayers.forEach((all) => {
-         if (player.id === all.id) {
-            socket.emit("error", { type: "alreadyConnected" });
-            error = true;
-            return;
-         } else if (player.username === all.username) {
-            socket.emit("error", { type: "invalidUsername" });
-            error = true;
-            return;
-         }
-      });
-
-      if (error === true) {
-         error = false;
+   socket.on(EventType.JOIN, (player) => {
+      if (players.filter((p) => p.id === player.id || p.username === player.username).length > 0) {
+         socket.emit(EventType.ERROR, { type: "alreadyConnected" });
          return;
       }
 
-      matchserver.emit("match-request", player);
+      matchserver.emit(EventType.FETCH_MATCH, player);
 
-      socket.emit("passed");
+      players.push(player);
+      sockets.set(player.id, socket);
 
-      log(`${player.username} joined the lobby!`);
+      for (const all of room[player.selected]) all.emit(EventType.JOIN, player);
 
-      if (connectedPlayers.includes(player)) {
-         connectedPlayers.splice(connectedPlayers.indexOf(player), 1);
-         playerSockets.delete(player.id);
-      }
+      room[player.selected].push(socket);
 
-      connectedPlayers.push(player);
-      playerSockets.set(player.id, socket);
+      socket.emit(EventType.JOIN, getRoom(player.selected));
 
-      io.emit("join", player);
+      log(player.username + " joined room " + player.selected + "!");
    });
 
-   socket.on("disconnect", (e) => {
-      console.log("-");
-      quit(socket);
+   socket.onAny((event) => {
+      if ([EventType.DISCONNECT, EventType.QUIT].includes(event)) quit(socket);
    });
 
-   socket.on("quit", (e) => {
-      quit(socket);
-   });
-
-   socket.on("request", (requested) => {
+   socket.on(EventType.REQUEST, (requested) => {
       let requester = getPlayer(socket);
 
-      playerSockets.get(requested.id).emit("request", requester);
+      getSocket(requested).emit(EventType.REQUEST, requester);
 
       log(`${requester.username} requests ${requested.username} for a match!`);
    });
 
-   socket.on("request-accept", (requester) => {
+   socket.on(EventType.REQUEST_ACCEPT, (requester) => {
       let requested = getPlayer(socket);
 
       let match = {
@@ -117,35 +114,35 @@ io.on("connection", (socket) => {
 
       createMatch(match);
 
-      playerSockets.get(requested.id).emit("match-start", match);
+      getSocket(requested).emit(EventType.MATCH_START, match);
 
       match.players.host = requester;
       match.players.guest = requested;
 
-      playerSockets.get(requester.id).emit("match-start", match);
+      sockets.get(requester.id).emit(EventType.MATCH_START, match);
 
       log(`${requested.username} accepted request from ${requester.username}!`);
    });
 
-   socket.on("request-decline", (requester) => {
+   socket.on(EventType.REQUEST_DECLINE, (requester) => {
       let requested = getPlayer(socket);
 
       log(`${requested.username} declined request from ${requester.username}!`);
 
-      playerSockets.get(requester.id).emit("request-decline", requested);
+      getSocket(requester).emit(EventType.REQUEST_DECLINE, requested);
    });
 
-   socket.on("request-revoke", (requested) => {
+   socket.on(EventType.REQUEST_REVOKE, (requested) => {
       let requester = getPlayer(socket);
 
       log(`${requester.username} revoked request for ${requested.username}!`);
 
-      playerSockets.get(requested.id).emit("request-revoke", getPlayer(socket));
+      getSocket(requested).emit(EventType.REQUEST_REVOKE, getPlayer(socket));
    });
 });
 
-matchserver.on("match-continue", ({ player, match }) => {
-   playerSockets.get(player.id).emit("match-continue", match);
+matchserver.on(EventType.MATCH_CONTINUE, ({ player, match }) => {
+   sockets.get(player.id).emit(EventType.MATCH_CONTINUE, match);
 });
 
 const log = (message) => {
@@ -160,12 +157,20 @@ const log = (message) => {
    console.log(`${timeFormat} » ${message}`);
 };
 
+function getRoom(roomName) {
+   const roomPlayers = [];
+
+   for (const socket of room[roomName]) roomPlayers.push(getPlayer(socket));
+
+   return roomPlayers;
+}
+
 const getPlayer = (socket) => {
    let p = null;
 
-   for (let [key, value] of playerSockets.entries()) {
-      if (value === socket) {
-         connectedPlayers.forEach((player) => {
+   for (let [key, value] of sockets.entries()) {
+      if (value == socket) {
+         players.forEach((player) => {
             if (player.id === key) {
                p = player;
             }
@@ -174,6 +179,10 @@ const getPlayer = (socket) => {
    }
 
    return p;
+};
+
+const getSocket = (player) => {
+   return sockets.get(player.id);
 };
 
 const createMatch = (match) => {

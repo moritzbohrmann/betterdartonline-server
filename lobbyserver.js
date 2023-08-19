@@ -30,7 +30,7 @@ const EventType = {
 };
 
 const players = new Array();
-const sockets = new Map();
+const sockets = new Array();
 const room = {
    X01: new Array(),
    Cricket: new Array(),
@@ -40,23 +40,24 @@ const room = {
 const quit = (socket) => {
    const player = getPlayer(socket);
 
-   if (player) {
-      const roomMates = getRoom(player.selected);
+   if (!player) return;
 
-      sockets.delete(player.id);
-      players.splice(players.indexOf(player), 1);
+   sockets.splice(sockets.indexOf(socket), 1);
+   players.splice(players.indexOf(player), 1);
 
-      room[player.selected].splice(roomMates.indexOf(player), 1);
+   room[player.selected].splice(room[player.selected].indexOf(player), 1);
 
-      for (const all of room[player.selected]) all.emit(EventType.QUIT, player);
-      socket.emit(EventType.QUIT, getRoom(player.selected));
+   for (const all of room[player.selected]) getSocket(all).emit(EventType.QUIT, player);
 
-      log(player.username + " left room " + player.selected + "!");
-   }
+   socket.emit(EventType.QUIT, room[player.selected]);
+
+   log(player.username + " left room " + player.selected + "!");
 };
 
 io.on("connection", (socket) => {
    socket.on(EventType.JOIN, (player) => {
+      player = { ...player, socketId: socket.id };
+
       if (players.filter((p) => p.id === player.id || p.username === player.username).length > 0) {
          socket.emit(EventType.ERROR, { type: "alreadyConnected" });
          return;
@@ -65,13 +66,13 @@ io.on("connection", (socket) => {
       matchserver.emit(EventType.FETCH_MATCH, player);
 
       players.push(player);
-      sockets.set(player.id, socket);
+      sockets.push(socket);
 
-      for (const all of room[player.selected]) all.emit(EventType.JOIN, player);
+      for (const all of room[player.selected]) getSocket(all).emit(EventType.JOIN, player);
 
-      room[player.selected].push(socket);
+      room[player.selected].push(player);
 
-      socket.emit(EventType.JOIN, getRoom(player.selected));
+      socket.emit(EventType.JOIN, room[player.selected]);
 
       log(player.username + " joined room " + player.selected + "!");
    });
@@ -157,32 +158,12 @@ const log = (message) => {
    console.log(`${timeFormat} » ${message}`);
 };
 
-function getRoom(roomName) {
-   const roomPlayers = [];
-
-   for (const socket of room[roomName]) roomPlayers.push(getPlayer(socket));
-
-   return roomPlayers;
-}
-
 const getPlayer = (socket) => {
-   let p = null;
-
-   for (let [key, value] of sockets.entries()) {
-      if (value == socket) {
-         players.forEach((player) => {
-            if (player.id === key) {
-               p = player;
-            }
-         });
-      }
-   }
-
-   return p;
+   return players.find((p) => p.socketId === socket.id);
 };
 
 const getSocket = (player) => {
-   return sockets.get(player.id);
+   return sockets.find((s) => s.id === player.socketId);
 };
 
 const createMatch = (match) => {

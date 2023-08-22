@@ -4,9 +4,11 @@ const http = require("http");
 const sio = require("socket.io");
 const matchserver = require("socket.io-client").connect("http://localhost:8457");
 const cors = require("cors");
+const { TournamentManager, Tournament } = require("./tournament");
 
 app.use(cors());
 
+const tm = new TournamentManager();
 const server = http.createServer(app);
 const io = new sio.Server(server, {
    cors: {
@@ -27,6 +29,7 @@ const EventType = {
    ERROR: "error",
    FETCH_MATCH: "match-request",
    MATCH_CONTINUE: "match-continue",
+   FETCH_TOURNAMENTS: "fetch-tournaments",
 };
 
 const players = new Array();
@@ -68,11 +71,16 @@ io.on("connection", (socket) => {
       players.push(player);
       sockets.push(socket);
 
-      for (const all of room[player.selected]) getSocket(all).emit(EventType.JOIN, player);
+      for (const all of room[player.selected]) {
+         console.log("SENT TO " + all.username);
+
+         getSocket(all).emit(EventType.JOIN, player);
+      }
 
       room[player.selected].push(player);
 
       socket.emit(EventType.JOIN, room[player.selected]);
+      socket.emit(EventType.FETCH_TOURNAMENTS, tm.tournaments);
 
       log(player.username + " joined room " + player.selected + "!");
    });

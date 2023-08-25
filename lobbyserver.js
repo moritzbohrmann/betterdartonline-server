@@ -1,14 +1,20 @@
 const express = require("express");
 const app = express();
+const bodyParser = require("body-parser");
 const http = require("http");
 const sio = require("socket.io");
 const matchserver = require("socket.io-client").connect("http://localhost:8457");
 const cors = require("cors");
 const { TournamentManager, Tournament } = require("./tournament");
+const { generateToken } = require("./utils/token");
 
 app.use(cors());
+app.use(bodyParser.json());
 
 const tm = new TournamentManager();
+
+tm.addTournament(new Tournament(32, "Summer Cup", "25.08.23", "26.08.23", "27.08.23", true, true));
+
 const server = http.createServer(app);
 const io = new sio.Server(server, {
    cors: {
@@ -39,6 +45,22 @@ const room = {
    Cricket: new Array(),
    Split: new Array(),
 };
+
+app.get("/players", (req, res) => {
+   res.json({ players: players });
+});
+app.get("/players/x01", (req, res) => {
+   res.json({ players: room.X01 });
+});
+app.get("/players/cricket", (req, res) => {
+   res.json({ players: room.Cricket });
+});
+app.get("/players/split", (req, res) => {
+   res.json({ players: room.Split });
+});
+app.get("/tournaments", (req, res) => {
+   res.json({ tournaments: tm.tournaments });
+});
 
 const quit = (socket) => {
    const player = getPlayer(socket);

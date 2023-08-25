@@ -1,0 +1,9 @@
+[
+   {
+      "id": "5fadbbf0-abb9-4d69-b687-737db10cff8b",
+      "username": "Moritz",
+      "email": "a@b.com",
+      "password": "123",
+      "question": { "value": "What's your parent's name?", "answer": "Carsten" }
+   }
+]

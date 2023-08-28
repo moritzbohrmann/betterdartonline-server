@@ -35,6 +35,13 @@ app.post("/account/register", async ({ body }, res) => {
 
 app.post("/account/login", async ({ body }, res) => {
    let account = await getAccount(AccountInfoType.EMAIL, body.email);
+
+   if (!(await account) && body.type === "GOOGLE") {
+      await addAccount(body);
+
+      account = await getAccount(AccountInfoType.EMAIL, body.email);
+   }
+
    let payload = { error: null, token: null };
 
    if (!account) {
@@ -42,17 +49,10 @@ app.post("/account/login", async ({ body }, res) => {
       return;
    }
 
-   if (body.password !== account.Password) {
-      res.json({ ...payload, error: "Wrong password." });
-      return;
-   }
-
-   if (body.question.answer !== account.Answer) {
-      res.json({ ...payload, error: "Wrong answer." });
-      return;
-   }
-
-   res.json({ ...payload, token: jwt.sign({ uuid: account.Uuid, username: account.Username }, AUTH_KEY, { expiresIn: "1m" }) });
+   res.json({
+      ...payload,
+      token: jwt.sign({ uuid: account.Uuid, username: account.Username, picture: account.Picture }, AUTH_KEY, { expiresIn: "2h" }),
+   });
 });
 
 app.get("/account/logout/:token", (req, res) => {
@@ -92,7 +92,7 @@ app.get("/account/info/:token", async (req, res) => {
          return;
       }
 
-      res.json({ ...payload, account: { uuid: account.Uuid, username: account.Username, email: account.Email, question: account.Question } });
+      res.json({ ...payload, account: { uuid: account.Uuid, username: account.Username, email: account.Email, picture: account.Picture } });
    } catch ({ message }) {
       if (message === "jwt expired") {
          return res.json({ ...payload, error: "Session expired. Sign in again." });
@@ -112,13 +112,6 @@ const AccountInfoType = {
    UUID: "Uuid",
 };
 
-const calcExpirationDate = () => {
-   const date = new Date();
-   date.setDate(date.getDate() + 2);
-
-   return date;
-};
-
 const getAccount = async (accountInfoType, accountInfo) => {
    const fetchAccount = async () => {
       return await db.execute(`SELECT * FROM accounts WHERE ${accountInfoType} = '${accountInfo}'`);
@@ -131,6 +124,8 @@ const getAccount = async (accountInfoType, accountInfo) => {
 
 const addAccount = async (account) => {
    return await db.query(
-      `INSERT INTO accounts (Uuid, Username, Email, Password, Question, Answer) VALUES ('${account.uuid}', '${account.username}', '${account.email}', '${account.password}', '${account.question.value}', '${account.question.answer}')`
+      `INSERT INTO accounts (Uuid, Username, Email, Password, Picture) VALUES ('${account.uuid ? account.uuid : crypto.randomUUID()}', '${
+         account.username
+      }', '${account.email}', '${account.password ? account.password : ""}', '${account.picture}')`
    );
 };

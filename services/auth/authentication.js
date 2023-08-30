@@ -36,7 +36,7 @@ app.post("/account/register", async ({ body }, res) => {
 app.post("/account/login", async ({ body }, res) => {
    let account = await getAccount(AccountInfoType.EMAIL, body.email);
 
-   if (!(await account) && body.type === "GOOGLE") {
+   if (!(await account) && body.type === "Google") {
       await addAccount(body);
 
       account = await getAccount(AccountInfoType.EMAIL, body.email);
@@ -46,6 +46,11 @@ app.post("/account/login", async ({ body }, res) => {
 
    if (!account) {
       res.json({ ...payload, error: "Account not found." });
+      return;
+   }
+
+   if (body.type === "Native" && body.password !== account.Password) {
+      res.json({ ...payload, error: "Wrong password." });
       return;
    }
 

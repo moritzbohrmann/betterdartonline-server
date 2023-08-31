@@ -12,20 +12,20 @@ class TournamentManager {
    }
 
    removeTournament(tournament) {
-      this.tournaments.splice(this.tournaments.index, 1);
+      this.tournaments.splice(this.tournaments.indexOf(tournament), 1);
    }
 }
 
 class Tournament {
-   constructor(size, name, endOfRegistrationDate, startDate, endDate, groupStage, doubleKO) {
+   constructor(admin, size, name, registrationDate, startDate, groupStage, elimination) {
       this.id = Date.now();
+      this.admin = admin;
       this.size = size;
       this.name = name;
-      this.endOfRegistrationDate = endOfRegistrationDate;
+      this.registrationDate = registrationDate;
       this.startDate = startDate;
-      this.endDate = endDate;
       this.groupStage = groupStage;
-      this.doubleKO = doubleKO;
+      this.elimination = elimination;
       this.players = [];
    }
    addPlayer(player) {
@@ -49,21 +49,29 @@ class TournamentApi {
       });
 
       this.app.get("/tournament/info/:id", (req, res) => {
-         const tournament = this.tournamentManager.tournaments.find((t) => t.id === req.params.id);
+         const tournament = this.tournamentManager.tournaments.find((t) => t.id == req.params.id);
+
+         console.log(tournament);
 
          res.json({ error: tournament === null ? "Tournament not found." : null, tournament });
       });
 
       this.app.post("/tournament/create", ({ body }, res) => {
          const tournament = new Tournament(
+            body.admin,
             body.size,
             body.name,
-            body.endOfRegistrationDate,
+            body.registrationDate,
             body.startDate,
             body.endDate,
             body.groupStage,
-            body.doubleKO
+            body.elimination
          );
+
+         if (this.tournamentManager.tournaments.find((t) => t.name === tournament.name)) {
+            res.json({ error: "Invalid tournament name. Name already in use." });
+            return;
+         }
 
          this.tournamentManager.addTournament(tournament);
 

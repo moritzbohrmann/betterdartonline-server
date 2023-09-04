@@ -105,6 +105,25 @@ app.get("/account/info/:token", async (req, res) => {
    }
 });
 
+app.get("/account/username/:id", async (req, res) => {
+   const { id } = req.params;
+
+   let payload = { error: null, username: null };
+
+   try {
+      const account = await getAccount(AccountInfoType.UUID, id);
+
+      if (!account) {
+         res.json({ ...payload, error: "This account does not seem to exist." });
+         return;
+      }
+
+      res.json({ ...payload, username: account.Username });
+   } catch (err) {
+      res.json({ error: " Something went wrong." });
+   }
+});
+
 app.listen(3003, () => {
    console.log("Listening on port 3003...");
 });

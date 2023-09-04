@@ -17,15 +17,17 @@ class TournamentManager {
 }
 
 class Tournament {
-   constructor(admin, size, name, registrationDate, startDate, groupStage, elimination) {
+   constructor(admin, size, name, description, registrationDate, startDate, groupStage, elimination, match) {
       this.id = Date.now();
       this.admin = admin;
       this.size = size;
       this.name = name;
+      this.description = description;
       this.registrationDate = registrationDate;
       this.startDate = startDate;
       this.groupStage = groupStage;
       this.elimination = elimination;
+      this.match = match;
       this.players = [];
    }
    addPlayer(player) {
@@ -51,8 +53,6 @@ class TournamentApi {
       this.app.get("/tournament/info/:id", (req, res) => {
          const tournament = this.tournamentManager.tournaments.find((t) => t.id == req.params.id);
 
-         console.log(tournament);
-
          res.json({ error: tournament === null ? "Tournament not found." : null, tournament });
       });
 
@@ -61,11 +61,12 @@ class TournamentApi {
             body.admin,
             body.size,
             body.name,
+            body.description,
             body.registrationDate,
             body.startDate,
-            body.endDate,
             body.groupStage,
-            body.elimination
+            body.elimination,
+            { gamemode: body.gamemode, legamount: body.legamount, points: body.points, checkout: body.checkout }
          );
 
          if (this.tournamentManager.tournaments.find((t) => t.name === tournament.name)) {

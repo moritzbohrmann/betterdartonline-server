@@ -1,3 +1,5 @@
+const db = require("../db/sql");
+
 class TournamentManager {
    constructor(_tournaments = []) {
       this.tournaments = _tournaments;
@@ -8,7 +10,17 @@ class TournamentManager {
    }
 
    addTournament(...tournaments) {
-      tournaments.forEach((tournament) => this.tournaments.push(tournament));
+      tournaments.forEach((tournament) => {
+         this.tournaments.push(tournament);
+
+         const { id, name, description, size, registrationDate, startDate, settings, entries } = tournament;
+
+         db.query(
+            `INSERT INTO tournaments (Id, Name, Description, Size, Dates, Settings, Entries) VALUES ('${id}', '${name}', '${description}', '${size}', '${JSON.stringify(
+               { reg: registrationDate, start: startDate }
+            )}', '${JSON.stringify(settings)}', '${JSON.stringify(entries)}')`
+         );
+      });
    }
 
    removeTournament(tournament) {
@@ -17,7 +29,7 @@ class TournamentManager {
 }
 
 class Tournament {
-   constructor(admin, size, name, description, registrationDate, startDate, groupStage, elimination, match) {
+   constructor(admin, size, name, description, registrationDate, startDate, settings) {
       this.id = Date.now();
       this.admin = admin;
       this.size = size;
@@ -25,10 +37,8 @@ class Tournament {
       this.description = description;
       this.registrationDate = registrationDate;
       this.startDate = startDate;
-      this.groupStage = groupStage;
-      this.elimination = elimination;
-      this.match = match;
-      this.players = [];
+      this.settings = settings;
+      this.entries = [];
    }
    addPlayer(player) {
       this.players.push(player);
@@ -57,17 +67,14 @@ class TournamentApi {
       });
 
       this.app.post("/tournament/create", ({ body }, res) => {
-         const tournament = new Tournament(
-            body.admin,
-            body.size,
-            body.name,
-            body.description,
-            body.registrationDate,
-            body.startDate,
-            body.groupStage,
-            body.elimination,
-            { gamemode: body.gamemode, legamount: body.legamount, points: body.points, checkout: body.checkout }
-         );
+         const tournament = new Tournament(body.admin, body.size, body.name, body.description, body.registrationDate, body.startDate, {
+            gamemode: body.gamemode,
+            legamount: body.legamount,
+            points: body.points,
+            checkout: body.checkout,
+            groupstage: body.groupStage,
+            elimination: body.elimination,
+         });
 
          if (this.tournamentManager.tournaments.find((t) => t.name === tournament.name)) {
             res.json({ error: "Invalid tournament name. Name already in use." });
